@@ -5,6 +5,7 @@ use Illuminate\Routing\RouteGroup;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\ProductController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -31,4 +32,16 @@ Route::prefix('v1')->group(function (){
         Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
     });
 
+});
+
+
+Route::prefix('v1')->group(function () {
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/products/{id}', [ProductController::class, 'show']);
+
+    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+        Route::post('/products', [ProductController::class, 'store']);
+        Route::put('/products/{id}', [ProductController::class, 'update']);
+        Route::delete('/products/{id}', [ProductController::class, 'destroy']);
+    });
 });
