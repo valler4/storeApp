@@ -45,3 +45,10 @@ Route::prefix('v1')->group(function () {
         Route::delete('/products/{id}', [ProductController::class, 'destroy']);
     });
 });
+
+Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
+    Route::get('/cart', [CartController::class, 'show']);
+    Route::post('/cart', [CartController::class, 'addItem']);
+    Route::put('/cart/{itemId}', [CartController::class, 'updateItem']);
+    Route::delete('/cart/{itemId}', [CartController::class, 'removeItem']);
+});
