@@ -12,11 +12,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('cart_items', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('cart_id')->constrained();
-            $table->foreignId('product_id')->constrained();
-            $table->integer('quantity');
+            $table->ulid('id')->primary();
+            $table->foreignUlid('cart_id')->constrained()->cascadeOnDelete();
+            $table->foreignUlid('product_id')->constrained()->cascadeOnDelete();
+            $table->unsignedInteger('quantity');
             $table->timestamps();
+
+            $table->unique(['cart_id', 'product_id']);
         });
     }
 
