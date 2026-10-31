@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CartItem;
+use App\Models\Product;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
-use App\Models\Product;
 
 class ProductController extends Controller
 {
@@ -16,7 +17,8 @@ class ProductController extends Controller
 
     public function index()
     {
-        $products = Product::where('is_hidden',0)->latest()->paginate(15);
+        $products = Product::where('is_hidden', 0)->latest()->paginate(15);
+
         return response()->json($products);
     }
 
@@ -48,14 +50,14 @@ class ProductController extends Controller
     {
         $user = auth('sanctum')->user();
 
-        if ($product->is_hidden && $user?->id !== $product->user_id){
+        if ($product->is_hidden && $user?->id !== $product->user_id) {
             abort(404);
         }
 
         return response()->json($product);
     }
 
-    public function update(Request $request,Product $product)
+    public function update(Request $request, Product $product)
     {
         $this->authorize('update', $product);
 
@@ -86,7 +88,7 @@ class ProductController extends Controller
     {
         $this->authorize('delete', $product);
 
-        Storage::disk('public')->delete($product->main_image);
+        CartItem::where('product_id', $product->id)->delete();
 
         $product->delete();
 
@@ -96,9 +98,17 @@ class ProductController extends Controller
         ]);
     }
 
-        private function storeImage(UploadedFile $image, string $name): string
+    private function storeImage(UploadedFile $image, string $name): string
     {
-        $filename = Str::slug($name) . '_' . Str::random(8) . '.' . $image->extension();
+        $filename = Str::slug($name).'_'.Str::random(8).'.'.$image->extension();
+
         return $image->storeAs('products', $filename, 'public');
+    }
+
+    public function mine(Request $request)
+    {
+        return response()->json(
+            $request->user()->products()->latest()->paginate(15)
+        );
     }
 }

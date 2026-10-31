@@ -17,7 +17,7 @@ class IsAdmin
     {
         if ($request->user() && $request->user()->role === 'admin') {
             return $next($request);
-        };
+        }
 
         return response()->json([
             'success' => false,

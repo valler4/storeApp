@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+#[Fillable(['total_price', 'shipping_address', 'shipping_phone', 'recipient_name'])]
 class Order extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUlids;
 
     public function user()
     {
@@ -19,8 +22,10 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
-    public function payments()
+    protected function casts(): array
     {
-        return $this->hasMany(Payment::class);
+        return [
+            'total_price' => 'decimal:2',
+        ];
     }
 }

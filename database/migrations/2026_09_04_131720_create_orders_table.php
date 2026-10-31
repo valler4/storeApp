@@ -12,13 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('orders', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained();
-            $table->enum('status', ['pending', 'processing', 'shipped', 'delivered', 'cancelled']);
+            $table->ulid('id')->primary();
+            $table->foreignUlid('user_id')->constrained();
             $table->decimal('total_price', 10, 2);
             $table->string('shipping_address');
             $table->string('shipping_phone');
-            $table->string('shipping_city')->nullable();
+            $table->string('recipient_name');
             $table->timestamps();
         });
     }

@@ -3,84 +3,81 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Models\Cart;
-use App\Models\CartItem;
 use App\Models\Product;
+use Illuminate\Http\Request;
 
 class CartController extends Controller
 {
     public function show(Request $request)
     {
-        $cart = Cart::with('cartItems.product')->firstOrCreate(['user_id' => $request->user()->id]);
+        $cart = $request->user()->cart()->with('cartItems.product')->first();
+
+        if (! $cart) {
+            return response()->json(['items' => [], 'total_items' => 0, 'total_price' => '0.00', 'unavailable_count' => 0]);
+        }
+
+        $cart->cartItems->each(function ($item) {
+            $reason = $item->unavailableReason();
+
+            $item->available = $reason === null;
+            $item->reason = $reason;
+        });
+
+        $available = $cart->cartItems->where('available', true);
+
+        $cart->total_items = $available->sum('quantity');
+        $cart->total_price = number_format(
+            $available->sum(fn ($item) => $item->product->price * $item->quantity),
+            2, '.', ''
+        );
+        $cart->unavailable_count = $cart->cartItems->count() - $available->count();
+
         return response()->json($cart);
     }
 
-    public function addItem(Request $request)
+    public function store(Request $request)
     {
         $request->validate([
             'product_id' => 'required|exists:products,id',
-            'quantity' => 'required|integer|min:1',
         ]);
 
-        $cart = Cart::firstOrCreate(['user_id' => $request->user()->id]);
+        $product = Product::where('is_hidden', false)->findOrFail($request->product_id);
 
-        $product = Product::findOrFail($request->product_id);
+        $cart = $request->user()->cart()->firstOrCreate();
 
-        if ($product->stock < $request->quantity) {
-            return response()->json(['error' => 'Not enough stock available'], 400);
-        }
+        $item = $cart->cartItems()->firstOrCreate(
+            ['product_id' => $product->id],
+            ['quantity' => 1]
+        );
 
-        $cartItem = CartItem::updateOrCreate([
-            'cart_id' => $cart->id,
-            'product_id' => $request->product_id,
-            'quantity' => $request->quantity,
-        ]);
+        return response()->json($item, $item->wasRecentlyCreated ? 201 : 200);
 
-        $product->increment('reserved_stock', $request->quantity);
-
-        return response()->json([
-            'success' => true,
-            'cart_item' => $cartItem,
-        ]);
     }
 
-    public function removeItem(Request $request, $itemId)
+    public function update(Request $request, string $itemId)
     {
-        $cartItem = CartItem::findOrFail($itemId);
+        $request->validate([
+            'quantity' => 'required|integer|min:1|max:99',
+        ]);
 
-        $cartItem->product->decrement('reserved_stock', $cartItem->quantity);
+        $cart = $request->user()->cart()->firstOrFail();
 
-        $cartItem->delete();
+        $item = $cart->cartItems()->findOrFail($itemId);
+
+        $item->update(['quantity' => $request->quantity]);
+
+        return response()->json($item);
+    }
+
+    public function remove(Request $request, $itemId)
+    {
+        $cart = $request->user()->cart()->firstOrFail();
+
+        $cart->cartItems()->findOrFail($itemId)->delete();
 
         return response()->json([
             'success' => true,
             'message' => 'Item removed from cart',
-        ]);
-    }
-
-    public function updateItem(Request $request, $itemId)
-    {
-        $request->validate([
-            'quantity' => 'required|integer|min:1',
-        ]);
-
-        $cartItem = CartItem::findOrFail($itemId);
-        $product = $cartItem->product;
-
-        $availableForThisUpdate = $product->available_stock + $cartItem->quantity;
-
-        if ($availableForThisUpdate < $request->quantity) {
-            return response()->json(['error' => 'Not enough stock available'], 400);
-        }
-
-        $product->decrement('reserved_stock', $cartItem->quantity);
-        $cartItem->update(['quantity' => $request->quantity]);
-        $product->increment('reserved_stock', $request->quantity);
-
-        return response()->json([
-            'success' => true,
-            'cart_item' => $cartItem,
         ]);
     }
 }

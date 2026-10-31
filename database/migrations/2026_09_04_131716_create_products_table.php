@@ -22,6 +22,7 @@ return new class extends Migration
             $table->boolean('is_active');
             $table->boolean('is_hidden');
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

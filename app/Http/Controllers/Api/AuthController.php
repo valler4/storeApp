@@ -11,21 +11,14 @@ class AuthController extends Controller
 {
     public function register(Request $request)
     {
-        $request->validate([
+        $data = $request->validate([
             'name' => 'required|string|max:255',
             'username' => 'required|string|max:255|unique:users',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        $user = User::create([
-            'public_id' => random_int(10000000, 99999999),
-            'name' => $request->name,
-            'username' => $request->username,
-            'email' => $request->email,
-            'password' => $request->password,
-            'role' => 'user',
-        ]);
+        $user = User::forceCreate([...$data, 'role' => 'user']);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -45,7 +38,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             return response()->json([
                 'message' => 'Invalid email or password',
             ], 401);
@@ -68,7 +61,6 @@ class AuthController extends Controller
             'success' => true,
             'message' => 'Logged out successfully',
         ], 200);
-        
-    }
 
+    }
 }

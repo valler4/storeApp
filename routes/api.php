@@ -1,16 +1,11 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Routing\RouteGroup;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
-use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProductController;
-
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+use App\Http\Controllers\Api\SellerOrderItemController;
+use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
@@ -20,30 +15,32 @@ Route::prefix('v1')->group(function () {
     });
 });
 
-
-Route::prefix('v1')->group(function () {
-    // Categories
-    Route::get('/categories', [CategoryController::class, 'index']);
-    Route::get('/categories/{id}', [CategoryController::class, 'show']);
-
-    // Products
+Route::prefix('v1')->middleware(['throttle:api'])->group(function () {
     Route::get('/products', [ProductController::class, 'index']);
-    Route::get('/products/{id}', [ProductController::class, 'show']);
-
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
-        Route::post('/categories', [CategoryController::class, 'store']);
-        Route::put('/categories/{id}', [CategoryController::class, 'update']);
-        Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
-
-        Route::post('/products', [ProductController::class, 'store']);
-        Route::put('/products/{id}', [ProductController::class, 'update']);
-        Route::delete('/products/{id}', [ProductController::class, 'destroy']);
-    });
+    Route::get('/products/{product}', [ProductController::class, 'show']);
 });
 
-Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
+Route::prefix('v1')->middleware(['auth:sanctum', 'throttle:api'])->group(function () {
+    Route::get('/my/products', [ProductController::class, 'mine']);
+    Route::post('/products', [ProductController::class, 'store']);
+    Route::put('/products/{product}', [ProductController::class, 'update']);
+    Route::delete('/products/{product}', [ProductController::class, 'destroy']);
+});
+
+Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
     Route::get('/cart', [CartController::class, 'show']);
-    Route::post('/cart', [CartController::class, 'addItem']);
-    Route::put('/cart/{itemId}', [CartController::class, 'updateItem']);
-    Route::delete('/cart/{itemId}', [CartController::class, 'removeItem']);
+    Route::post('/cart/items', [CartController::class, 'store']);
+    Route::patch('/cart/items/{item}', [CartController::class, 'update']);
+    Route::delete('/cart/items/{item}', [CartController::class, 'remove']);
+});
+
+Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::post('/orders', [OrderController::class, 'store']);
+    Route::get('/orders/{order}', [OrderController::class, 'show']);
+    Route::patch('/orders/items/{item}/cancel', [OrderController::class, 'cancel']);
+
+    Route::get('/seller/order-items', [SellerOrderItemController::class, 'index']);
+    Route::patch('/seller/order-items/{item}', [SellerOrderItemController::class, 'update']);
+    Route::patch('/seller/order-items/{item}/cancel', [SellerOrderItemController::class, 'cancel']);
 });
