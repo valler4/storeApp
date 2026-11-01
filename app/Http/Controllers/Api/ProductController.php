@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreProductRequest;
+use App\Http\Requests\UpdateProductRequest;
+use App\Http\Resources\ProductResource;
 use App\Models\CartItem;
 use App\Models\Product;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -17,33 +20,18 @@ class ProductController extends Controller
 
     public function index()
     {
-        $products = Product::where('is_hidden', 0)->latest()->paginate(15);
-
-        return response()->json($products);
+        return ProductResource::collection(
+            Product::where('is_hidden', false)->latest()->paginate(15)
+        );
     }
 
-    public function store(Request $request)
+    public function store(StoreProductRequest $request)
     {
-        $this->authorize('create', Product::class);
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'required|string',
-            'price' => 'required|numeric|min:0|max:99999999.99',
-            'stock' => 'required|integer|min:0',
-            'main_image' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'is_active' => 'required|boolean',
-            'is_hidden' => 'required|boolean',
-        ]);
+        $data = $request->validated();
+        $data['main_image'] = $this->storeImage($request->file('main_image'), $data['name']);
+        $data['user_id'] = $request->user()->id;
 
-        $validated['main_image'] = $this->storeImage($request->file('main_image'), $validated['name']);
-        $validated['user_id'] = $request->user()->id;
-
-        $product = Product::create($validated);
-
-        return response()->json([
-            'success' => true,
-            'product' => $product,
-        ], 201);
+        return new ProductResource(Product::create($data));
     }
 
     public function show(Product $product)
@@ -54,22 +42,14 @@ class ProductController extends Controller
             abort(404);
         }
 
-        return response()->json($product);
+        return new ProductResource($product);
     }
 
-    public function update(Request $request, Product $product)
+    public function update(UpdateProductRequest $request, Product $product)
     {
         $this->authorize('update', $product);
 
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'required|string',
-            'price' => 'required|numeric|min:0|max:99999999.99',
-            'stock' => 'required|integer|min:0',
-            'main_image' => 'sometimes|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'is_active' => 'required|boolean',
-            'is_hidden' => 'required|boolean',
-        ]);
+        $data = $request->validated();
 
         if ($request->hasFile('main_image')) {
             Storage::disk('public')->delete($product->main_image);
@@ -78,10 +58,7 @@ class ProductController extends Controller
 
         $product->update($data);
 
-        return response()->json([
-            'success' => true,
-            'product' => $product,
-        ]);
+        return new ProductResource($product);
     }
 
     public function destroy(Product $product)
@@ -92,23 +69,18 @@ class ProductController extends Controller
 
         $product->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Product deleted successfully',
-        ]);
+        return response()->noContent();
     }
 
     private function storeImage(UploadedFile $image, string $name): string
     {
-        $filename = Str::slug($name).'_'.Str::random(8).'.'.$image->extension();
+        $filename = Str::slug($name) . '_' . Str::random(8) . '.' . $image->extension();
 
         return $image->storeAs('products', $filename, 'public');
     }
 
     public function mine(Request $request)
     {
-        return response()->json(
-            $request->user()->products()->latest()->paginate(15)
-        );
+        return ProductResource::collection($request->user()->products()->latest()->paginate(15));
     }
 }

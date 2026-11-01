@@ -27,3 +27,5 @@ Homestead.yaml
 Thumbs.db
 AGENT_CONTEXT.md
 PROJECT.md
+*.md
+testing
