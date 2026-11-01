@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreOrderRequest;
+use App\Http\Resources\OrderItemResource;
+use App\Http\Resources\OrderResource;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Services\OrderItemCancellationService;
@@ -13,48 +16,33 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
-        $orders = $request->user()->orders()
-            ->with('orderItems')
-            ->latest()
-            ->paginate(15);
-
-        return response()->json($orders);
+        return OrderResource::collection(
+            $request->user()->orders()->with('orderItems')->latest()->paginate(15)
+        );
     }
 
     public function show(Request $request, string $orderId)
     {
-        $order = $request->user()->orders()
-            ->with('orderItems')
-            ->findOrFail($orderId);
-
-        return response()->json($order);
+        return new OrderResource(
+            $request->user()->orders()->with('orderItems')->findOrFail($orderId)
+        );
     }
 
-    public function store(Request $request)
+    public function store(StoreOrderRequest $request)
     {
-        $request->validate([
-            'item_ids' => 'required|array|min:1',
-            'item_ids.*' => 'required|string|distinct',
-            'recipient_name' => 'required|string|max:255',
-            'shipping_phone' => 'required|string|max:30',
-            'shipping_address' => 'required|string|max:255',
-        ], [
-            'item_ids.required' => 'Select at least one item to purchase.',
-            'item_ids.*.distinct' => 'The same item was sent more than once.',
-        ]);
-
         // Only items inside the current user's own cart.
         $cart = $request->user()->cart()->firstOrFail();
 
-        $cartItems = $cart->cartItems()
-            ->whereIn('id', $request->item_ids)
-            ->get();
+        return DB::transaction(function () use ($request, $cart) {
 
-        if ($cartItems->count() < count($request->item_ids)) {
-            abort(404, 'One or more items were not found in your cart.');
-        }
+            $cartItems = $cart->cartItems()
+                ->whereIn('id', $request->item_ids)
+                ->get();
 
-        return DB::transaction(function () use ($request, $cartItems) {
+            if ($cartItems->count() < count($request->item_ids)) {
+                abort(404, 'One or more items were not found in your cart.');
+            }
+
             $products = Product::whereIn('id', $cartItems->pluck('product_id'))
                 ->lockForUpdate()
                 ->get()
@@ -90,14 +78,12 @@ class OrderController extends Controller
 
             // Total is calculated on the server, in cents, from the locked prices.
             $totalCents = $cartItems->sum(
-                fn ($item) => $products->get($item->product_id)->priceInCents() * $item->quantity
+                fn($item) => $products->get($item->product_id)->priceInCents() * $item->quantity
             );
 
             $order = $request->user()->orders()->create([
+                ...$request->safe()->only(['recipient_name', 'shipping_phone', 'shipping_address']),
                 'total_price' => number_format($totalCents / 100, 2, '.', ''),
-                'recipient_name' => $request->recipient_name,
-                'shipping_phone' => $request->shipping_phone,
-                'shipping_address' => $request->shipping_address,
             ]);
 
             foreach ($cartItems as $item) {
@@ -114,19 +100,19 @@ class OrderController extends Controller
                 $product->decrement('stock', $item->quantity);
             }
 
-            return response()->json($order->load('orderItems'), 201);
+            return new OrderResource($order->load('orderItems'));
         });
     }
 
     public function cancel(Request $request, OrderItemCancellationService $service, string $itemId)
     {
-        $item = OrderItem::whereHas('order', fn ($q) => $q->where('user_id', $request->user()->id))
+        $item = OrderItem::whereHas('order', fn($q) => $q->where('user_id', $request->user()->id))
             ->findOrFail($itemId);
 
         if (! $service->cancel($item)) {
             return response()->json(['message' => 'Only pending items can be cancelled.'], 422);
         }
 
-        return response()->json($item->fresh());
+        return new OrderItemResource($item->fresh());
     }
 }

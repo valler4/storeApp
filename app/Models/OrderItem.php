@@ -21,4 +21,11 @@ class OrderItem extends Model
     {
         return $this->belongsTo(Product::class)->withTrashed();
     }
+
+        protected function casts(): array
+    {
+        return [
+            'price_at_purchase' => 'decimal:2',
+        ];
+    }
 }
