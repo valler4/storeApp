@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AddCartItemRequest;
+use App\Http\Requests\UpdateCartItemRequest;
+use App\Http\Resources\CartItemResource;
+use App\Http\Resources\CartResource;
 use App\Models\Product;
 use Illuminate\Http\Request;
 
@@ -10,39 +14,15 @@ class CartController extends Controller
 {
     public function show(Request $request)
     {
-        $cart = $request->user()->cart()->with('cartItems.product')->first();
+        $cart = $request->user()->cart()->with('cartItems.product')->firstOrNew();
 
-        if (! $cart) {
-            return response()->json(['items' => [], 'total_items' => 0, 'total_price' => '0.00', 'unavailable_count' => 0]);
-        }
-
-        $cart->cartItems->each(function ($item) {
-            $reason = $item->unavailableReason();
-
-            $item->available = $reason === null;
-            $item->reason = $reason;
-        });
-
-        $available = $cart->cartItems->where('available', true);
-
-        $cart->total_items = $available->sum('quantity');
-        $cart->total_price = number_format(
-            $available->sum(fn ($item) => $item->product->price * $item->quantity),
-            2, '.', ''
-        );
-        $cart->unavailable_count = $cart->cartItems->count() - $available->count();
-
-        return response()->json($cart);
+        return new CartResource($cart);
     }
 
-    public function store(Request $request)
+    public function store(AddCartItemRequest $request)
     {
-        $request->validate([
-            'product_id' => 'required|exists:products,id',
-        ]);
 
         $product = Product::where('is_hidden', false)->findOrFail($request->product_id);
-
         $cart = $request->user()->cart()->firstOrCreate();
 
         $item = $cart->cartItems()->firstOrCreate(
@@ -50,34 +30,24 @@ class CartController extends Controller
             ['quantity' => 1]
         );
 
-        return response()->json($item, $item->wasRecentlyCreated ? 201 : 200);
+        return new CartItemResource($item);
 
     }
 
-    public function update(Request $request, string $itemId)
+    public function update(UpdateCartItemRequest $request, string $itemId)
     {
-        $request->validate([
-            'quantity' => 'required|integer|min:1|max:99',
-        ]);
-
         $cart = $request->user()->cart()->firstOrFail();
-
         $item = $cart->cartItems()->findOrFail($itemId);
-
         $item->update(['quantity' => $request->quantity]);
 
-        return response()->json($item);
+        return new CartItemResource($item);
     }
 
     public function remove(Request $request, $itemId)
     {
         $cart = $request->user()->cart()->firstOrFail();
-
         $cart->cartItems()->findOrFail($itemId)->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Item removed from cart',
-        ]);
+        return  response()->noContent();
     }
 }

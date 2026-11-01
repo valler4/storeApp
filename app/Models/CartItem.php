@@ -31,10 +31,4 @@ class CartItem extends Model
         return $this->product->unavailableReason($this->quantity);
     }
 
-    protected function casts(): array
-    {
-        return [
-            'price_at_purchase' => 'decimal:2',
-        ];
-    }
 }
